@@ -6,6 +6,7 @@
   "engines" : ["node"],
   "repository" : { "type":"git", "url":"http://github.com/mape/node-express-boilerplate" },
   "dependencies" : {
+    "cloudfoundry": ">=0.1.0",
     "connect" : ">=1.6.0",
     "connect-assetmanager" : ">=0.0.21",
     "connect-assetmanager-handlers" : ">=0.0.17",
