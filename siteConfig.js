@@ -1,9 +1,11 @@
+var cf = require('cloudfoundry');
 var settings = {
-	'sessionSecret': 'sessionSecret'
+  'sessionSecret': 'sessionSecret-238273283abs'
+  , 'internal_host' : '127.0.0.1'
+  , 'internal_port' : 8080
 	, 'port': 8080
-	, 'uri': 'http://localhost:8080' // Without trailing /
-
-	// You can add multiple recipiants for notifo notifications
+	, 'uri': 'http://moni-air.local:8080' // Without trailing /
+  , 'redisOptions': {host: '127.0.0.1', port: 6379}
 	, 'notifoAuth': null /*[
 		{
 			'username': ''
@@ -11,30 +13,40 @@ var settings = {
 		}
 	]*/
 
-	/*
+
 	// Enter API keys to enable auth services, remove entire object if they aren't used.
 	, 'external': {
 		'facebook': {
-			appId: '123983866527489',
-			appSecret: '6edf1327ege27bbba2e239f73cd866c4'
+			appId: process.env.facebook_app_id,
+			appSecret: process.env.facebook_app_secret
 		}
 		, 'twitter': {
-			consumerKey: 'eA54JQ6rtdZE7nqaRa6Oa',
-			consumerSecret: '6u2makgFdf4F6EauP7osa54L34SouU6eLgaadTD435Rw'
+			consumerKey: process.env.twitter_consumer_key,
+			consumerSecret: process.env.twitter_consumer_secret
 		}
 		, 'github': {
-			appId: '1444g6a7d26a3f716b47',
-			appSecret: 'e84f13367f328da4b8c96a4f74gfe7e421b6a206'
+			appId: process.env.github_client_id,
+			appSecret: process.env.github_client_secret
 		}
 	}
-	*/
-	, 'debug': (process.env.NODE_ENV !== 'production')
+
+	, 'debug': cf.cloud
 };
 
-if (process.env.NODE_ENV == 'production') {
-	settings.uri = 'http://yourname.no.de';
-	settings.port = process.env.PORT || 80; // Joyent SmartMachine uses process.env.PORT
+if (cf.cloud) {
+	settings.uri = 'http://' + cf.app.name + '.cloudfoundry.com';
+  settings.internal_host = cf.host;
+  settings.internal_port = cf.port;
+	settings.port = 80; // CloudFoundry uses process.env.VMC_APP_PORT
 
-	//settings.airbrakeApiKey = '0190e64f92da110c69673b244c862709'; // Error logging, Get free API key from https://airbrakeapp.com/account/new/Free
+	settings.airbrakeApiKey = process.env.airbrake_api_key; // Error logging, Get free API key from https://airbrakeapp.com/account/new/Free
+
+    if (cf.redis['redis-asms'] != null) {
+        var redisConfig = cf.redis['redis-asms'].credentials;
+        settings.redisOptions.port = redisConfig.port;
+        settings.redisOptions.host = redisConfig.hostname;
+        settings.redisOptions.pass = redisConfig.password;
+    }
+    settings.user_email = cf.app['users'][0];
 }
 module.exports = settings;
