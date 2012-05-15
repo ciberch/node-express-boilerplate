@@ -1,0 +1,16 @@
+--- 
+applications: 
+  .: 
+    name: node-express-start
+    instances: 1
+    framework: 
+      name: node
+      info: 
+        exec: 
+        description: Node.js Application
+        mem: 128M
+    url: ${name}.${target-base}
+    services: 
+      redis-asms: 
+        type: redis
+    mem: 128M

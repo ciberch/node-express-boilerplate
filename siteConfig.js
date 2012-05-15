@@ -34,10 +34,10 @@ var settings = {
 };
 
 if (cf.cloud) {
-	settings.uri = 'http://' + cf.app.name + '.cloudfoundry.com';
+  settings.uri = 'http://' + cf.app.name + '.cloudfoundry.com';
   settings.internal_host = cf.host;
   settings.internal_port = cf.port;
-	settings.port = 80; // CloudFoundry uses process.env.VMC_APP_PORT
+  settings.port = 80; // CloudFoundry uses process.env.VMC_APP_PORT
 
 	settings.airbrakeApiKey = process.env.airbrake_api_key; // Error logging, Get free API key from https://airbrakeapp.com/account/new/Free
 
@@ -47,6 +47,5 @@ if (cf.cloud) {
         settings.redisOptions.host = redisConfig.hostname;
         settings.redisOptions.pass = redisConfig.password;
     }
-    settings.user_email = cf.app['users'][0];
 }
 module.exports = settings;
