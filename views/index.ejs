@@ -4,8 +4,12 @@
 	<%= (session.auth && session.auth.twitter) ? '//twitter.com/favicon.ico' : '' %>
 	<%= (session.auth && session.auth.facebook) ? '//facebook.com/favicon.ico' : '' %>
 ">
-<div id="bubble">
-	<ul></ul>
+<div id="stream">
+	<ul>
+		<% if(!session.auth) {%>
+		  <li>Log In to Send Messages</li>
+		<% } %>
+	</ul>
 </div>
 <div id="connected">
 	<strong>Online</strong>

@@ -39,9 +39,6 @@ if (cf.app) {
     thisInstance.url = "http://" + cf.host + ":" + cf.port;
     thisInstance.displayName = "App Instance " + cf.app['instance_index'] + " at " + thisInstance.url;
     thisInstance.content = cf.app['instance_id']
-    //temp
-    console.log("Instance JSON is *******");
-    console.dir(app);
 }
 
 thisApp.save(function (err) {
@@ -51,7 +48,7 @@ thisApp.save(function (err) {
             actor: {displayName: siteConf.user_email, image:{url: "img/me.jpg"}},
             verb: 'start',
             object: thisInstance,
-            target: thisApp._id,
+            target: thisApp,
             title: "started"
             });
 
@@ -210,16 +207,7 @@ function NotFound(msg){
 	Error.captureStackTrace(this, arguments.callee);
 }
 
-function getMetaData(req, res, next) {
-    req.objectTypes = ['person', 'group', 'stream'];
-    req.verbs = ['post', 'join'];
-    next();
-};
-
 function loadUser(req, res, next) {
-    console.log("Request Session is");
-    console.dir(req.session);
-
 	if (!req.session.uid) {
 		req.session.uid = (0 | Math.random()*1000000);
 	} else if (req.session.auth){
@@ -236,143 +224,14 @@ function loadUser(req, res, next) {
     next();
 }
 
-function getDistinctVerbs(req, res, next){
-    req.usedVerbs = []
-    asmsDB.Activity.distinct('verb', {streams: req.session.desiredStream}, function(err, docs) {
-        if (!err && docs) {
-            _.each(docs, function(verb){
-                req.usedVerbs.push(verb);
-            });
-            next();
-        } else {
-            next(new Error('Failed to fetch verbs'));
-        }
-    });
-};
-
-function getDistinctActors(req, res, next){
-    req.usedActors = []
-        asmsDB.Activity.distinct('actor', {streams: req.session.desiredStream}, function(err, docs) {
-            if (!err && docs) {
-                _.each(docs, function(obj){
-                    req.usedActors.push(obj);
-                });
-                next();
-            } else {
-                next(new Error('Failed to fetch actors'));
-            }
-        });
-};
-
-function getDistinctObjects(req, res, next){
-    req.usedObjects = []
-        asmsDB.Activity.distinct('object', {streams: req.session.desiredStream}, function(err, docs) {
-            if (!err && docs) {
-                _.each(docs, function(obj){
-                    req.usedObjects.push(obj);
-                });
-                next();
-            } else {
-                next(new Error('Failed to fetch objects'));
-            }
-        });
-};
-
-function getDistinctObjectTypes(req, res, next){
-    req.usedObjectTypes = ['none']
-        asmsDB.Activity.distinct('object.objectType', {streams: req.session.desiredStream}, function(err, docs) {
-            if (!err && docs) {
-                _.each(docs, function(objType){
-                    req.usedObjectTypes.push(objType);
-                });
-                next();
-            } else {
-                next(new Error('Failed to fetch objTypes'));
-            }
-        });
-};
-
-function getDistinctActorObjectTypes(req, res, next){
-    req.usedActorObjectTypes = ['none']
-        asmsDB.Activity.distinct('actor.objectType', {streams: req.session.desiredStream}, function(err, docs) {
-            if (!err && docs) {
-                _.each(docs, function(objType){
-                    req.usedActorObjectTypes.push(objType);
-                });
-                next();
-            } else {
-                next(new Error('Failed to fetch actorobjTypes'));
-            }
-        });
-};
-
-function getDistinctStreams(req, res, next){
-    req.session.desiredStream = req.params.streamName ? req.params.streamName : "firehose";
-    req.streams = {}
-    asmsDB.Activity.distinct('streams', {}, function(err, docs) {
-        if (!err && docs) {
-            _.each(docs, function(stream){
-                req.streams[stream] = {name: stream, items: []};
-            });
-            next();
-        } else {
-            next(new Error('Failed to fetch streams'));
-        }
-    });
-}
-
 // Routing
-app.get('/', loadUser, getDistinctStreams, getDistinctVerbs, getDistinctActorObjectTypes, getDistinctObjects,
-    getDistinctActors, getDistinctObjectTypes, getMetaData, function(req, res) {
-
-    asmsDB.getActivityStreamFirehose(20, function (err, docs) {
-        var activities = [];
-        if (!err && docs) {
-            activities = docs;
-        }
-        req.streams.firehose.items = activities;
-        res.render('index', {
-            currentUser: req.user,
-            providerFavicon: req.providerFavicon,
-            streams : req.streams,
-            desiredStream : req.session.desiredStream,
-            objectTypes : req.objectTypes,
-            verbs: req.verbs,
-            usedVerbs: req.usedVerbs,
-            usedObjects: req.usedObjects,
-            usedObjectTypes: req.usedObjectTypes,
-            usedActorObjectTypes: req.usedActorObjectTypes,
-            usedActors: req.usedActors
-        });
-    });
-
+app.get('/', loadUser, function(req, res) {
+    res.render('index', {
+				currentUser: req.user,
+				providerFavicon: req.providerFavicon,
+		});
 });
 
-app.get('/streams/:streamName', loadUser, getDistinctStreams, getDistinctVerbs, getDistinctObjects, getDistinctActors,
-    getDistinctObjectTypes, getDistinctActorObjectTypes, getDistinctVerbs, getMetaData, function(req, res) {
-
-    asmsDB.getActivityStream(req.params.streamName, 20, function (err, docs) {
-        var activities = [];
-        if (!err && docs) {
-            activities = docs;
-        }
-        req.streams[req.params.streamName].items = activities;
-        res.render('index', {
-            currentUser: req.user,
-            providerFavicon: req.providerFavicon,
-            streams : req.streams,
-            desiredStream : req.session.desiredStream,
-            objectTypes : req.objectTypes,
-            verbs: req.verbs,
-            usedVerbs: req.usedVerbs,
-            usedObjects: req.usedObjects,
-            usedObjectTypes: req.usedObjectTypes,
-            usedActorObjectTypes: req.usedActorObjectTypes,
-            usedActors: req.usedActors
-        });
-    });
-
-});
 
 // Initiate this after all other routing is done, otherwise wildcard will go crazy.
 var dummyHelpers = new DummyHelper(app);

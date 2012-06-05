@@ -50,7 +50,7 @@ strong {
 	height: 100%;
 	box-shadow: 0 0 5px rgba(0,0,0,0.6) inset;
 }
-#bubble {
+#stream {
 	position: absolute;
 	top: 20px;
 	left: 155px;
@@ -58,10 +58,10 @@ strong {
 	overflow: hidden;
 	padding: 0 0 0 65px;
 }
-#bubble ul {
+#stream ul {
 	height: 2000px;
 }
-#bubble li {
+#stream li {
 	position:relative;
 	padding:15px;
 	margin:1em 0 3em 100px;
@@ -75,13 +75,13 @@ strong {
 	opacity: 0;
 	-vendor-transition: opacity 4s linear;
 }
-#bubble .avatar {
+#stream .avatar {
 	position: absolute;
 	right: 100%;
 	top: 10px;
 	margin-right: 45px;
 }
-#bubble .service {
+#stream .service {
 	position: absolute;
 	right: 100%;
 	top: -0px;
@@ -91,10 +91,10 @@ strong {
 	padding: 2px;
 	box-shadow: 0 0 5px #000;
 }
-#bubble li:first-child {
+#stream li:first-child {
 	opacity: 1;
 }
-#bubble li:after {
+#stream li:after {
 	content: "";
 	position: absolute;
 	bottom: -20px;
