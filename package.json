@@ -6,6 +6,9 @@
   "engines" : ["node"],
   "repository" : { "type":"git", "url":"http://github.com/mape/node-express-boilerplate" },
   "dependencies" : {
+	  "activity-streams-mongoose": ">=0.0.9",
+	  "mongoose": "",
+	  "underscore": "",
     "cloudfoundry": ">=0.1.0",
     "connect" : ">=1.6.0",
     "connect-assetmanager" : ">=0.0.21",

@@ -1,5 +1,7 @@
 // Fetch the site configuration
 var siteConf = require('./lib/getConfig');
+var cf = require('cloudfoundry');
+var _ = require('underscore')._;
 
 process.title = siteConf.uri.replace(/http:\/\/(www)?/, '');
 
@@ -21,12 +23,50 @@ var assetHandler = require('connect-assetmanager-handlers');
 var notifoMiddleware = require('connect-notifo');
 var DummyHelper = require('./lib/dummy-helper');
 
+var mongoose = require('mongoose');
+mongoose.connect(siteConf.mongoUrl);
+
 // Session store
 var RedisStore = require('connect-redis')(express);
 var sessionStore = new RedisStore(siteConf.redisOptions);
 
+var asmsDB = require('activity-streams-mongoose')(mongoose, {full: false, redis: siteConf.redisOptions, defaultActor: '/img/default.png'});
+
+var thisApp = new asmsDB.ActivityObject({displayName: 'Activity Streams App', url: siteConf.uri, image:{url: '/img/as-logo-sm.png'}});
+var thisInstance = {displayName: "Instance 0 -- Local"};
+if (cf.app) {
+    thisInstance.image = {url: '/img/cf-process.jpg'};
+    thisInstance.url = "http://" + cf.host + ":" + cf.port;
+    thisInstance.displayName = "App Instance " + cf.app['instance_index'] + " at " + thisInstance.url;
+    thisInstance.content = cf.app['instance_id']
+    //temp
+    console.log("Instance JSON is *******");
+    console.dir(app);
+}
+
+thisApp.save(function (err) {
+    if (err === null) {
+        var startAct = new asmsDB.Activity(
+            {
+            actor: {displayName: siteConf.user_email, image:{url: "img/me.jpg"}},
+            verb: 'start',
+            object: thisInstance,
+            target: thisApp._id,
+            title: "started"
+            });
+
+        asmsDB.publish('firehose', startAct);
+    }
+});
+
 var app = module.exports = express.createServer();
 app.listen(siteConf.internal_port, null);
+app.asmsDB = asmsDB;
+app.siteConf = siteConf;
+app.thisApp = thisApp;
+app.thisInstance = thisInstance;
+app.cookieName = "jsessionid"; //Use this name to get sticky sessions. Default connect name is 'connect.sid';
+// Cookie name must be lowercase
 
 // Setup socket.io server
 var socketIo = new require('./lib/socket-io-server.js')(app, sessionStore);
@@ -97,7 +137,8 @@ app.configure(function() {
 	app.use(express.cookieParser());
 	app.use(assetsMiddleware);
 	app.use(express.session({
-		'store': sessionStore
+        'key': app.cookieName
+		, 'store': sessionStore
 		, 'secret': siteConf.sessionSecret
 	}));
 	app.use(express.logger({format: ':response-time ms - :date - :req[x-real-ip] - :method :url :user-agent / :referrer'}));
@@ -169,16 +210,168 @@ function NotFound(msg){
 	Error.captureStackTrace(this, arguments.callee);
 }
 
-// Routing
-app.all('/', function(req, res) {
-	// Set example session uid for use with socket.io.
+function getMetaData(req, res, next) {
+    req.objectTypes = ['person', 'group', 'stream'];
+    req.verbs = ['post', 'join'];
+    next();
+};
+
+function loadUser(req, res, next) {
+    console.log("Request Session is");
+    console.dir(req.session);
+
 	if (!req.session.uid) {
 		req.session.uid = (0 | Math.random()*1000000);
-	}
-	res.locals({
-		'key': 'value'
-	});
-	res.render('index');
+	} else if (req.session.auth){
+       if (req.session.auth.github)
+        req.providerFavicon = '//github.com/favicon.ico';
+       else if (req.session.auth.twitter)
+        req.providerFavicon = '//twitter.com/favicon.ico';
+       else if (req.session.auth.facebook)
+        req.providerFavicon = '//facebook.com/favicon.ico';
+    }
+    var displayName = req.session.user ? req.session.user.name : 'UID: '+(req.session.uid || 'has no UID');
+    var avatarUrl = ((req.session.auth && req.session.user.image) ? req.session.user.image : '/img/codercat-sm.jpg');
+    req.user = {displayName: displayName, image: {url: avatarUrl}};
+    next();
+}
+
+function getDistinctVerbs(req, res, next){
+    req.usedVerbs = []
+    asmsDB.Activity.distinct('verb', {streams: req.session.desiredStream}, function(err, docs) {
+        if (!err && docs) {
+            _.each(docs, function(verb){
+                req.usedVerbs.push(verb);
+            });
+            next();
+        } else {
+            next(new Error('Failed to fetch verbs'));
+        }
+    });
+};
+
+function getDistinctActors(req, res, next){
+    req.usedActors = []
+        asmsDB.Activity.distinct('actor', {streams: req.session.desiredStream}, function(err, docs) {
+            if (!err && docs) {
+                _.each(docs, function(obj){
+                    req.usedActors.push(obj);
+                });
+                next();
+            } else {
+                next(new Error('Failed to fetch actors'));
+            }
+        });
+};
+
+function getDistinctObjects(req, res, next){
+    req.usedObjects = []
+        asmsDB.Activity.distinct('object', {streams: req.session.desiredStream}, function(err, docs) {
+            if (!err && docs) {
+                _.each(docs, function(obj){
+                    req.usedObjects.push(obj);
+                });
+                next();
+            } else {
+                next(new Error('Failed to fetch objects'));
+            }
+        });
+};
+
+function getDistinctObjectTypes(req, res, next){
+    req.usedObjectTypes = ['none']
+        asmsDB.Activity.distinct('object.objectType', {streams: req.session.desiredStream}, function(err, docs) {
+            if (!err && docs) {
+                _.each(docs, function(objType){
+                    req.usedObjectTypes.push(objType);
+                });
+                next();
+            } else {
+                next(new Error('Failed to fetch objTypes'));
+            }
+        });
+};
+
+function getDistinctActorObjectTypes(req, res, next){
+    req.usedActorObjectTypes = ['none']
+        asmsDB.Activity.distinct('actor.objectType', {streams: req.session.desiredStream}, function(err, docs) {
+            if (!err && docs) {
+                _.each(docs, function(objType){
+                    req.usedActorObjectTypes.push(objType);
+                });
+                next();
+            } else {
+                next(new Error('Failed to fetch actorobjTypes'));
+            }
+        });
+};
+
+function getDistinctStreams(req, res, next){
+    req.session.desiredStream = req.params.streamName ? req.params.streamName : "firehose";
+    req.streams = {}
+    asmsDB.Activity.distinct('streams', {}, function(err, docs) {
+        if (!err && docs) {
+            _.each(docs, function(stream){
+                req.streams[stream] = {name: stream, items: []};
+            });
+            next();
+        } else {
+            next(new Error('Failed to fetch streams'));
+        }
+    });
+}
+
+// Routing
+app.get('/', loadUser, getDistinctStreams, getDistinctVerbs, getDistinctActorObjectTypes, getDistinctObjects,
+    getDistinctActors, getDistinctObjectTypes, getMetaData, function(req, res) {
+
+    asmsDB.getActivityStreamFirehose(20, function (err, docs) {
+        var activities = [];
+        if (!err && docs) {
+            activities = docs;
+        }
+        req.streams.firehose.items = activities;
+        res.render('index', {
+            currentUser: req.user,
+            providerFavicon: req.providerFavicon,
+            streams : req.streams,
+            desiredStream : req.session.desiredStream,
+            objectTypes : req.objectTypes,
+            verbs: req.verbs,
+            usedVerbs: req.usedVerbs,
+            usedObjects: req.usedObjects,
+            usedObjectTypes: req.usedObjectTypes,
+            usedActorObjectTypes: req.usedActorObjectTypes,
+            usedActors: req.usedActors
+        });
+    });
+
+});
+
+app.get('/streams/:streamName', loadUser, getDistinctStreams, getDistinctVerbs, getDistinctObjects, getDistinctActors,
+    getDistinctObjectTypes, getDistinctActorObjectTypes, getDistinctVerbs, getMetaData, function(req, res) {
+
+    asmsDB.getActivityStream(req.params.streamName, 20, function (err, docs) {
+        var activities = [];
+        if (!err && docs) {
+            activities = docs;
+        }
+        req.streams[req.params.streamName].items = activities;
+        res.render('index', {
+            currentUser: req.user,
+            providerFavicon: req.providerFavicon,
+            streams : req.streams,
+            desiredStream : req.session.desiredStream,
+            objectTypes : req.objectTypes,
+            verbs: req.verbs,
+            usedVerbs: req.usedVerbs,
+            usedObjects: req.usedObjects,
+            usedObjectTypes: req.usedObjectTypes,
+            usedActorObjectTypes: req.usedActorObjectTypes,
+            usedActors: req.usedActors
+        });
+    });
+
 });
 
 // Initiate this after all other routing is done, otherwise wildcard will go crazy.

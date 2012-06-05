@@ -1,11 +1,14 @@
 var cf = require('cloudfoundry');
 var settings = {
-  'sessionSecret': 'sessionSecret-238273283abs'
-  , 'internal_host' : '127.0.0.1'
-  , 'internal_port' : 8080
+    'user_email' : 'mwilkinson@vmware.com',
+	'sessionSecret': 'sessionSecret'
+    , 'internal_host' : '127.0.0.1'
+    , 'internal_port' : 8080
 	, 'port': 8080
 	, 'uri': 'http://moni-air.local:8080' // Without trailing /
-  , 'redisOptions': {host: '127.0.0.1', port: 6379}
+    , 'redisOptions': {host: '127.0.0.1', port: 6379}
+    , 'mongoUrl': 'mongodb://localhost/mongodb-asms'
+	// You can add multiple recipients for notifo notifications
 	, 'notifoAuth': null /*[
 		{
 			'username': ''
@@ -47,5 +50,11 @@ if (cf.cloud) {
         settings.redisOptions.host = redisConfig.hostname;
         settings.redisOptions.pass = redisConfig.password;
     }
+
+    if (cf.mongodb['mongo-asms']) {
+        var cfg = cf.mongodb['mongo-asms'].credentials;
+        settings.mongoUrl = ["mongodb://", cfg.username, ":", cfg.password, "@", cfg.hostname, ":", cfg.port,"/" + cfg.db].join('');
+    }
+    settings.user_email = cf.app['users'][0];
 }
 module.exports = settings;
